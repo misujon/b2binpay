@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\B2BinpayInvoiceGenerateRequest;
+use App\Http\Requests\B2BinpayInvoiceVerifyRequest;
 use App\Models\Customer;
 use App\Models\Payment;
 use App\Services\B2BinPayService;
@@ -21,7 +22,18 @@ class B2BinpayController extends Controller
     {
         try
         {
+            $response = $this->payService->processPayment(
+                $request->invoice_label,
+                $request->amount,
+                $request->currency,
+                $request->redirect_url,
+                $request->reference
+            );
 
+            return response()->json([
+                'message' => "Invoice generated successfully!",
+                'data'    => $response,
+            ], 200);
         }
         catch (\Exception $e)
         {
@@ -32,33 +44,26 @@ class B2BinpayController extends Controller
         }
     }
 
-    public function storeCustomer($name, $email): Customer
+    public function verifyInvoice(B2BinpayInvoiceVerifyRequest $request)
     {
-        $customer = Customer::where('email', $email)->first();
-        if ($customer) return $customer;
+        try
+        {
+            $response = $this->payService->processPayment(
+                $request->invoice_label,
+                $request->amount,
+                $request->currency,
+                $request->redirect_url,
+                $request->reference
+            );
 
-        $customer                     = new Customer();
-        $customer->name               = $name;
-        $customer->email              = $email;
-        $customer->save();
-        return $customer;
-    }
-
-    public function storePaymentDb($payment_gateway_id, $project_id, $customer_id, $customer_card_id = null, $amount, $transaction_id, $reference, $response, $incomingRequest, $requestedOn = null): Payment
-    {
-        $payment                     = new Payment();
-        $payment->payment_gateway_id = $payment_gateway_id;
-        $payment->project_id         = $project_id;
-        $payment->customer_id        = $customer_id;
-        $payment->customer_card_id   = $customer_card_id;
-        $payment->amount             = ($amount/100);
-        $payment->transaction_id     = $transaction_id;
-        $payment->reference          = $reference;
-        $payment->response           = json_encode($response);
-        $payment->incoming_request   = json_encode($incomingRequest);
-        $payment->created_at         = $requestedOn ?? Carbon::now();
-        $payment->save();
-
-        return $payment;
+            return response()->json('', 200);
+        }
+        catch (\Exception $e)
+        {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'data'    => [],
+            ], 422);
+        }
     }
 }

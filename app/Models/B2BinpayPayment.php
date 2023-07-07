@@ -10,6 +10,7 @@ class B2BinpayPayment extends Model
     use HasFactory;
 
     protected $fillable = [
+        'invoice_id',
         'name',
         'label',
         'address',
@@ -30,4 +31,9 @@ class B2BinpayPayment extends Model
         'message',
         'response',
     ];
+
+    public const INVOICE = "INVOICE";
+    public const PAID = "PAID";
+    public const CANCELED = "CANCELED";
+    public const UNRESOLVED = "UNRESOLVED";
 }

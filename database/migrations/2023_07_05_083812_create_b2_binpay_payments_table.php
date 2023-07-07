@@ -13,11 +13,13 @@ return new class extends Migration
     {
         Schema::create('b2_binpay_payments', function (Blueprint $table) {
             $table->id();
+            $table->string('invoice_id');
             $table->string('name');
             $table->string('label');
             $table->string('address');
             $table->string('destination');
             $table->string('tracking_id');
+            $table->string('reference')->nullable();
 
             $table->string('target_amount_requested', 50);
             $table->string('target_paid', 50);
