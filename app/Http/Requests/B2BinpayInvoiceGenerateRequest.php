@@ -26,8 +26,7 @@ class B2BinpayInvoiceGenerateRequest extends FormRequest
             'invoice_label' => 'required|string|max:100',
             'amount' => 'required|gt:0',
             'redirect_url' => 'nullable|url',
-            'reference' => 'required|string|max:100',
-            'currency' => 'required|exists:currencies,id'
+            'reference' => 'required|string|max:100'
         ];
     }
 }

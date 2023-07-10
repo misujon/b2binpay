@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Payment;
 use App\Services\B2BinPayService;
 use Carbon\Carbon;
+use Exception;
 use Illuminate\Http\Request;
 
 class B2BinpayController extends Controller
@@ -25,7 +26,6 @@ class B2BinpayController extends Controller
             $response = $this->payService->processPayment(
                 $request->invoice_label,
                 $request->amount,
-                $request->currency,
                 $request->redirect_url,
                 $request->reference
             );
@@ -35,7 +35,7 @@ class B2BinpayController extends Controller
                 'data'    => $response,
             ], 200);
         }
-        catch (\Exception $e)
+        catch (Exception $e)
         {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -48,17 +48,13 @@ class B2BinpayController extends Controller
     {
         try
         {
-            $response = $this->payService->processPayment(
-                $request->invoice_label,
-                $request->amount,
-                $request->currency,
-                $request->redirect_url,
-                $request->reference
-            );
+            if (empty($request->data['id'])) throw new Exception("Under data, id is required!");
+            $verified = $this->payService->verifyPayment($request->data['id']);
+            if (!$verified) throw new Exception("Error to verify payment!");
 
             return response()->json('', 200);
         }
-        catch (\Exception $e)
+        catch (Exception $e)
         {
             return response()->json([
                 'message' => $e->getMessage(),

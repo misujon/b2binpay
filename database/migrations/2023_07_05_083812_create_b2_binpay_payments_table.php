@@ -25,7 +25,7 @@ return new class extends Migration
             $table->string('target_paid', 50);
             $table->string('target_commission', 50);
             $table->string('source_amount_requested', 50);
-            $table->string('currency');
+            $table->string('currency')->nullable();
             $table->string('wallet');
             $table->enum('status', ['INVOICE', 'PAID', 'CANCELED', 'UNRESOLVED'])->default('INVOICE');
 

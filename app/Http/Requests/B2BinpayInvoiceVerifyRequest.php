@@ -22,8 +22,7 @@ class B2BinpayInvoiceVerifyRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'data' => 'required|array',
-            'date.attributes' => 'required|array',
+            'data' => 'required|array'
         ];
     }
 }

@@ -27,14 +27,8 @@ class B2BinPayService
         $this->timeLimit = 86400; // 24 hours in seconds
     }
 
-    public function processPayment($label, $amount, $currency, $redirectUrl, $reference)
+    public function processPayment($label, $amount, $redirectUrl, $reference)
     {
-        $getCurrency = Currency::find($currency);
-        if (!$getCurrency)
-        {
-            throw new Exception("Selected currency not found!");
-        }
-
         $body = [
             "data" => [
                 "type" => "deposit",
@@ -53,24 +47,18 @@ class B2BinPayService
                            "type" => "wallet",
                            "id" => $this->wallet->wallet
                         ]
-                    ],
-                    "currency" => [
-                        "data" => [
-                           "type" => "currency",
-                           "id" => $getCurrency->iso_code
-                        ]
                     ]
                 ]
             ]
         ];
 
         $payment = $this->paymentApiRequest($body);
-        if (!$payment)
+        if ($payment == false)
         {
             throw new Exception("Error to generate payment request, please try again!");
         }
 
-        Log::info("response => ", $payment);
+        $payment = json_decode($payment, true);
         $status = B2BinpayPayment::INVOICE;
         if ($payment['data']['attributes']['status'] == 3) $status = B2BinpayPayment::PAID;
         if ($payment['data']['attributes']['status'] == 4) $status = B2BinpayPayment::CANCELED;
@@ -87,7 +75,6 @@ class B2BinPayService
             'target_paid' => $payment['data']['attributes']['target_paid'],
             'target_commission' => $payment['data']['attributes']['target_commission'],
             'source_amount_requested' => $payment['data']['attributes']['source_amount_requested'],
-            'currency' => $payment['data']['relationships']['currency']['data']['id'],
             'wallet' => $payment['data']['relationships']['wallet']['data']['id'],
             'status' => $status,
             'expired_at' => date('Y-m-d H:i:s', strtotime($payment['data']['attributes']['expired_at'])),
@@ -115,7 +102,7 @@ class B2BinPayService
         try
         {
             $res = $client->sendAsync($request)->wait();
-            return json_decode($res->getBody()->getContents(), true);
+            return $res->getBody()->getContents();
         }
         catch (\GuzzleHttp\Exception\RequestException $e)
         {
@@ -128,7 +115,8 @@ class B2BinPayService
                 $retry++;
                 if ($retry < 3)
                 {
-                    return $this->paymentApiRequest($body, $auth, $retry);
+                    $retryPayment = $this->paymentApiRequest($body, $auth, $retry);
+                    return $retryPayment;
                 }
 
                 return false;
@@ -180,11 +168,69 @@ class B2BinPayService
             $this->wallet->save();
 
 
-            return $res['data']['attribute']['access'];
+            return $res['data']['attributes']['access'];
         }
         catch (\GuzzleHttp\Exception\RequestException $e)
         {
             Log::error($e->getResponse());
+            return false;
+        }
+    }
+
+    public function verifyPayment($paymentId, $token = null, $retry = 0)
+    {
+        $getPayment = B2BinpayPayment::where('invoice_id', $paymentId)->first();
+        if (!$getPayment) throw new Exception("Payment not found!");
+
+        $client = new Client();
+        $headers = [
+            'Content-Type' => 'application/vnd.api+json',
+            'Authorization' => "Bearer ".((is_null($token))?$this->wallet->token:$token),
+        ];
+        $url = env('B2B_IN_PAY_ENDPOINT')."/deposit/".$getPayment->invoice_id;
+        $request = new Request('GET', $url, $headers);
+
+        try
+        {
+            $res = $client->sendAsync($request)->wait();
+            $result = $res->getBody()->getContents();
+            $result = json_decode($result, true);
+
+            if (isset($result['data']['attributes']['status']) == 3)
+            {
+                $getPayment->status = B2BinpayPayment::PAID;
+            }
+            else if (isset($result['data']['attributes']['status']) == 4)
+            {
+                $getPayment->status = B2BinpayPayment::CANCELED;
+            }
+            else if (isset($result['data']['attributes']['status']) == 5)
+            {
+                $getPayment->status = B2BinpayPayment::UNRESOLVED;
+            }
+
+            $getPayment->save();
+            return true;
+        }
+        catch (\GuzzleHttp\Exception\RequestException $e)
+        {
+            $errorRes = ["Unauthorized", "Not Found"];
+            if ($e->hasResponse() && in_array($e->getResponse()->getReasonPhrase(), $errorRes))
+            {
+                $this->wallet->refresh_token = null;
+                $this->wallet->save();
+
+                $auth = $this->reAuthenticate();
+                $retry++;
+                if ($retry <= 1)
+                {
+                    $retryPayment = $this->verifyPayment($paymentId, $auth, $retry);
+                    return $retryPayment;
+                }
+
+                return false;
+            }
+
             return false;
         }
     }
